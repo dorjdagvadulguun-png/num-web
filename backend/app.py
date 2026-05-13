@@ -1,13 +1,16 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pymysql
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+import hashlib
+import time
 
 app = Flask(__name__)
-app.secret_key = "num_secret_123"
-CORS(app, supports_credentials=True)
+CORS(app, origins=["http://localhost:8080"])
+
+tokens = {}
 
 def get_db():
     return pymysql.connect(
@@ -29,7 +32,14 @@ def init_db():
             password VARCHAR(255) NOT NULL
         )
     """)
-
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS menu (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            label VARCHAR(100) NOT NULL,
+            link VARCHAR(200) NOT NULL,
+            order_num INT DEFAULT 0
+        )
+    """)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS introduction (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -38,7 +48,6 @@ def init_db():
             image_url VARCHAR(500)
         )
     """)
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS teachers (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -49,14 +58,14 @@ def init_db():
             image_url VARCHAR(500)
         )
     """)
-
     cur.execute("""
         CREATE TABLE IF NOT EXISTS programs (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255),
             degree VARCHAR(50),
             duration VARCHAR(50),
-            description TEXT
+            description TEXT,
+            image_url VARCHAR(500)
         )
     """)
 
@@ -65,6 +74,17 @@ def init_db():
         cur.execute("INSERT INTO admin (username, password) VALUES (%s, %s)",
             ("admin", generate_password_hash("admin123")))
 
+    cur.execute("SELECT * FROM menu")
+    if not cur.fetchone():
+        defaults = [
+            ("Танилцуулга", "#intro", 1),
+            ("Багш нар", "#teachers", 2),
+            ("Хөтөлбөрүүд", "#programs", 3),
+        ]
+        for label, link, order in defaults:
+            cur.execute("INSERT INTO menu (label, link, order_num) VALUES (%s,%s,%s)",
+                (label, link, order))
+
     conn.commit()
     conn.close()
 
@@ -72,7 +92,8 @@ def init_db():
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if "admin_id" not in session:
+        token = request.headers.get("X-Token")
+        if not token or token not in tokens:
             return jsonify({"error": "Нэвтрэх шаардлагатай"}), 401
         return f(*args, **kwargs)
     return decorated
@@ -86,13 +107,60 @@ def login():
     user = cur.fetchone()
     conn.close()
     if user and check_password_hash(user["password"], data["password"]):
-        session["admin_id"] = user["id"]
-        return jsonify({"message": "ok"})
+        token = hashlib.md5(f"{user['id']}{time.time()}".encode()).hexdigest()
+        tokens[token] = user["id"]
+        return jsonify({"message": "ok", "token": token})
     return jsonify({"error": "Буруу нэвтрэх мэдээлэл"}), 401
 
 @app.route("/api/logout", methods=["POST"])
 def logout():
-    session.clear()
+    token = request.headers.get("X-Token")
+    if token in tokens:
+        del tokens[token]
+    return jsonify({"message": "ok"})
+
+# ── MENU ──
+@app.route("/api/menu", methods=["GET"])
+def get_menu():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM menu ORDER BY order_num")
+    rows = cur.fetchall()
+    conn.close()
+    return jsonify(rows)
+
+@app.route("/api/menu", methods=["POST"])
+@login_required
+def add_menu():
+    data = request.get_json()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO menu (label, link, order_num) VALUES (%s,%s,%s)",
+        (data["label"], data["link"], data.get("order_num", 0)))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "ok"}), 201
+
+@app.route("/api/menu/<int:id>", methods=["PUT"])
+@login_required
+def update_menu(id):
+    data = request.get_json()
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE menu SET label=%s, link=%s, order_num=%s WHERE id=%s",
+        (data["label"], data["link"], data.get("order_num", 0), id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "ok"})
+
+@app.route("/api/menu/<int:id>", methods=["DELETE"])
+@login_required
+def delete_menu(id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM menu WHERE id=%s", (id,))
+    conn.commit()
+    conn.close()
     return jsonify({"message": "ok"})
 
 # ── INTRODUCTION ──
@@ -111,7 +179,7 @@ def add_intro():
     data = request.get_json()
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("INSERT INTO introduction (title, content, image_url) VALUES (%s, %s, %s)",
+    cur.execute("INSERT INTO introduction (title, content, image_url) VALUES (%s,%s,%s)",
         (data["title"], data["content"], data.get("image_url", "")))
     conn.commit()
     conn.close()
@@ -199,8 +267,8 @@ def add_program():
     data = request.get_json()
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("INSERT INTO programs (name, degree, duration, description) VALUES (%s,%s,%s,%s)",
-        (data["name"], data["degree"], data["duration"], data["description"]))
+    cur.execute("INSERT INTO programs (name, degree, duration, description, image_url) VALUES (%s,%s,%s,%s,%s)",
+        (data["name"], data["degree"], data["duration"], data["description"], data.get("image_url", "")))
     conn.commit()
     conn.close()
     return jsonify({"message": "ok"}), 201
@@ -211,8 +279,8 @@ def update_program(id):
     data = request.get_json()
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("UPDATE programs SET name=%s, degree=%s, duration=%s, description=%s WHERE id=%s",
-        (data["name"], data["degree"], data["duration"], data["description"], id))
+    cur.execute("UPDATE programs SET name=%s, degree=%s, duration=%s, description=%s, image_url=%s WHERE id=%s",
+        (data["name"], data["degree"], data["duration"], data["description"], data.get("image_url", ""), id))
     conn.commit()
     conn.close()
     return jsonify({"message": "ok"})

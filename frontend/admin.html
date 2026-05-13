@@ -37,16 +37,17 @@
 
   <!-- TABS -->
   <ul class="nav nav-tabs mb-4">
-    <li class="nav-item"><a class="nav-link active" href="#" onclick="showTab('intro')">Танилцуулга</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="showTab('teachers')">Багш нар</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="showTab('programs')">Хөтөлбөрүүд</a></li>
+    <li class="nav-item"><a class="nav-link active" href="#" onclick="showTab(event,'intro')">Танилцуулга</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="showTab(event,'teachers')">Багш нар</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="showTab(event,'programs')">Хөтөлбөрүүд</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="showTab(event,'menu')">Цэс</a></li>
   </ul>
 
   <!-- INTRO TAB -->
   <div id="tab-intro">
     <button class="btn btn-success mb-3" onclick="openModal('intro')">+ Нэмэх</button>
     <table class="table table-bordered table-hover">
-      <thead class="table-dark"><tr><th>#</th><th>Гарчиг</th><th>Агуулга</th><th>Үйлдэл</th></tr></thead>
+      <thead class="table-dark"><tr><th>#</th><th>Гарчиг</th><th>Агуулга</th><th>Зураг</th><th>Үйлдэл</th></tr></thead>
       <tbody id="introTable"></tbody>
     </table>
   </div>
@@ -55,7 +56,7 @@
   <div id="tab-teachers" class="d-none">
     <button class="btn btn-success mb-3" onclick="openModal('teachers')">+ Нэмэх</button>
     <table class="table table-bordered table-hover">
-      <thead class="table-dark"><tr><th>#</th><th>Нэр</th><th>Цол</th><th>Тэнхим</th><th>Имэйл</th><th>Үйлдэл</th></tr></thead>
+      <thead class="table-dark"><tr><th>#</th><th>Нэр</th><th>Цол</th><th>Тэнхим</th><th>Зураг</th><th>Үйлдэл</th></tr></thead>
       <tbody id="teachersTable"></tbody>
     </table>
   </div>
@@ -64,8 +65,17 @@
   <div id="tab-programs" class="d-none">
     <button class="btn btn-success mb-3" onclick="openModal('programs')">+ Нэмэх</button>
     <table class="table table-bordered table-hover">
-      <thead class="table-dark"><tr><th>#</th><th>Нэр</th><th>Зэрэг</th><th>Хугацаа</th><th>Үйлдэл</th></tr></thead>
+      <thead class="table-dark"><tr><th>#</th><th>Нэр</th><th>Зэрэг</th><th>Хугацаа</th><th>Зураг</th><th>Үйлдэл</th></tr></thead>
       <tbody id="programsTable"></tbody>
+    </table>
+  </div>
+
+  <!-- MENU TAB -->
+  <div id="tab-menu" class="d-none">
+    <button class="btn btn-success mb-3" onclick="openModal('menu')">+ Цэс нэмэх</button>
+    <table class="table table-bordered table-hover">
+      <thead class="table-dark"><tr><th>#</th><th>Нэр</th><th>Холбоос</th><th>Дараалал</th><th>Үйлдэл</th></tr></thead>
+      <tbody id="menuTable"></tbody>
     </table>
   </div>
 
@@ -96,7 +106,9 @@ let currentTab = "intro";
 let editId = null;
 let modal;
 
-window.onload = () => { modal = new bootstrap.Modal(document.getElementById("formModal")); };
+window.onload = () => {
+  modal = new bootstrap.Modal(document.getElementById("formModal"));
+};
 
 // ── AUTH ──
 async function doLogin() {
@@ -123,56 +135,80 @@ async function doLogout() {
 }
 
 // ── TABS ──
-function showTab(tab) {
-  ["intro","teachers","programs"].forEach(t => {
+function showTab(e, tab) {
+  e.preventDefault();
+  ["intro","teachers","programs","menu"].forEach(t => {
     document.getElementById("tab-"+t).classList.add("d-none");
-    document.querySelectorAll(".nav-link").forEach(l => l.classList.remove("active"));
   });
+  document.querySelectorAll(".nav-link").forEach(l => l.classList.remove("active"));
   document.getElementById("tab-"+tab).classList.remove("d-none");
-  event.target.classList.add("active");
+  e.target.classList.add("active");
   currentTab = tab;
   loadTable(tab);
 }
 
 // ── LOAD TABLES ──
 async function loadTable(tab) {
-  const map = {intro: "introduction", teachers: "teachers", programs: "programs"};
-  const res = await fetch(API + "/api/" + map[tab], {credentials: "include"});
+  const map = {intro:"introduction", teachers:"teachers", programs:"programs", menu:"menu"};
+  const res = await fetch(API + "/api/" + map[tab], {credentials:"include"});
   const data = await res.json();
 
   if (tab === "intro") {
-    document.getElementById("introTable").innerHTML = data.map(i => `
+    document.getElementById("introTable").innerHTML = data.length ? data.map(i => `
       <tr>
-        <td>${i.id}</td><td>${i.title}</td>
-        <td>${i.content.substring(0,50)}...</td>
+        <td>${i.id}</td>
+        <td>${i.title}</td>
+        <td>${i.content.substring(0,40)}...</td>
+        <td>${i.image_url ? `<img src="${i.image_url}" style="height:40px;border-radius:4px;" onerror="this.style.display='none'"/>` : "—"}</td>
         <td>
           <button class="btn btn-sm btn-warning me-1" onclick="editRow('intro',${i.id})">Засах</button>
           <button class="btn btn-sm btn-danger" onclick="deleteRow('introduction',${i.id},'intro')">Устгах</button>
         </td>
-      </tr>`).join("");
+      </tr>`).join("") : "<tr><td colspan='5' class='text-center text-muted'>Мэдээлэл байхгүй</td></tr>";
   }
 
   if (tab === "teachers") {
-    document.getElementById("teachersTable").innerHTML = data.map(t => `
+    document.getElementById("teachersTable").innerHTML = data.length ? data.map(t => `
       <tr>
-        <td>${t.id}</td><td>${t.name}</td><td>${t.title}</td>
-        <td>${t.department}</td><td>${t.email}</td>
+        <td>${t.id}</td>
+        <td>${t.name}</td>
+        <td>${t.title}</td>
+        <td>${t.department}</td>
+        <td>${t.image_url ? `<img src="${t.image_url}" style="height:40px;border-radius:4px;" onerror="this.style.display='none'"/>` : "—"}</td>
         <td>
           <button class="btn btn-sm btn-warning me-1" onclick="editRow('teachers',${t.id})">Засах</button>
           <button class="btn btn-sm btn-danger" onclick="deleteRow('teachers',${t.id},'teachers')">Устгах</button>
         </td>
-      </tr>`).join("");
+      </tr>`).join("") : "<tr><td colspan='6' class='text-center text-muted'>Мэдээлэл байхгүй</td></tr>";
   }
 
   if (tab === "programs") {
-    document.getElementById("programsTable").innerHTML = data.map(p => `
+    document.getElementById("programsTable").innerHTML = data.length ? data.map(p => `
       <tr>
-        <td>${p.id}</td><td>${p.name}</td><td>${p.degree}</td><td>${p.duration}</td>
+        <td>${p.id}</td>
+        <td>${p.name}</td>
+        <td>${p.degree}</td>
+        <td>${p.duration}</td>
+        <td>${p.image_url ? `<img src="${p.image_url}" style="height:40px;border-radius:4px;" onerror="this.style.display='none'"/>` : "—"}</td>
         <td>
           <button class="btn btn-sm btn-warning me-1" onclick="editRow('programs',${p.id})">Засах</button>
           <button class="btn btn-sm btn-danger" onclick="deleteRow('programs',${p.id},'programs')">Устгах</button>
         </td>
-      </tr>`).join("");
+      </tr>`).join("") : "<tr><td colspan='6' class='text-center text-muted'>Мэдээлэл байхгүй</td></tr>";
+  }
+
+  if (tab === "menu") {
+    document.getElementById("menuTable").innerHTML = data.length ? data.map(m => `
+      <tr>
+        <td>${m.id}</td>
+        <td>${m.label}</td>
+        <td>${m.link}</td>
+        <td>${m.order_num}</td>
+        <td>
+          <button class="btn btn-sm btn-warning me-1" onclick="editRow('menu',${m.id})">Засах</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteRow('menu',${m.id},'menu')">Устгах</button>
+        </td>
+      </tr>`).join("") : "<tr><td colspan='5' class='text-center text-muted'>Мэдээлэл байхгүй</td></tr>";
   }
 }
 
@@ -185,7 +221,8 @@ function openModal(tab, data=null) {
     document.getElementById("modalBody").innerHTML = `
       <input type="text" id="f_title" class="form-control mb-2" placeholder="Гарчиг" value="${data?.title||''}"/>
       <textarea id="f_content" class="form-control mb-2" rows="4" placeholder="Агуулга">${data?.content||''}</textarea>
-      <input type="text" id="f_image" class="form-control" placeholder="Зургийн URL (заавал биш)" value="${data?.image_url||''}"/>`;
+      <input type="text" id="f_image" class="form-control mb-2" placeholder="Зургийн URL (заавал биш)" value="${data?.image_url||''}"/>
+      ${data?.image_url ? `<img src="${data.image_url}" class="img-fluid rounded mt-1" style="max-height:120px;" onerror="this.style.display='none'"/>` : ""}`;
   }
 
   if (tab === "teachers") {
@@ -194,7 +231,8 @@ function openModal(tab, data=null) {
       <input type="text" id="f_title" class="form-control mb-2" placeholder="Цол" value="${data?.title||''}"/>
       <input type="text" id="f_dept" class="form-control mb-2" placeholder="Тэнхим" value="${data?.department||''}"/>
       <input type="email" id="f_email" class="form-control mb-2" placeholder="Имэйл" value="${data?.email||''}"/>
-      <input type="text" id="f_image" class="form-control" placeholder="Зургийн URL (заавал биш)" value="${data?.image_url||''}"/>`;
+      <input type="text" id="f_image" class="form-control mb-2" placeholder="Зургийн URL (заавал биш)" value="${data?.image_url||''}"/>
+      ${data?.image_url ? `<img src="${data.image_url}" class="img-fluid rounded mt-1" style="max-height:120px;" onerror="this.style.display='none'"/>` : ""}`;
   }
 
   if (tab === "programs") {
@@ -202,15 +240,24 @@ function openModal(tab, data=null) {
       <input type="text" id="f_name" class="form-control mb-2" placeholder="Хөтөлбөрийн нэр" value="${data?.name||''}"/>
       <input type="text" id="f_degree" class="form-control mb-2" placeholder="Зэрэг (Бакалавр...)" value="${data?.degree||''}"/>
       <input type="text" id="f_duration" class="form-control mb-2" placeholder="Хугацаа (4 жил...)" value="${data?.duration||''}"/>
-      <textarea id="f_desc" class="form-control" rows="3" placeholder="Тайлбар">${data?.description||''}</textarea>`;
+      <textarea id="f_desc" class="form-control mb-2" rows="3" placeholder="Тайлбар">${data?.description||''}</textarea>
+      <input type="text" id="f_image" class="form-control mb-2" placeholder="Зургийн URL (заавал биш)" value="${data?.image_url||''}"/>
+      ${data?.image_url ? `<img src="${data.image_url}" class="img-fluid rounded mt-1" style="max-height:120px;" onerror="this.style.display='none'"/>` : ""}`;
+  }
+
+  if (tab === "menu") {
+    document.getElementById("modalBody").innerHTML = `
+      <input type="text" id="f_label" class="form-control mb-2" placeholder="Цэсний нэр" value="${data?.label||''}"/>
+      <input type="text" id="f_link" class="form-control mb-2" placeholder="Холбоос (#intro эсвэл https://...)" value="${data?.link||''}"/>
+      <input type="number" id="f_order" class="form-control" placeholder="Дараалал (1, 2, 3...)" value="${data?.order_num||0}"/>`;
   }
 
   modal.show();
 }
 
 async function editRow(tab, id) {
-  const map = {intro: "introduction", teachers: "teachers", programs: "programs"};
-  const res = await fetch(API + "/api/" + map[tab], {credentials: "include"});
+  const map = {intro:"introduction", teachers:"teachers", programs:"programs", menu:"menu"};
+  const res = await fetch(API + "/api/" + map[tab], {credentials:"include"});
   const data = await res.json();
   const row = data.find(r => r.id === id);
   openModal(tab, row);
@@ -218,7 +265,7 @@ async function editRow(tab, id) {
 
 // ── SAVE ──
 async function saveData() {
-  const map = {intro: "introduction", teachers: "teachers", programs: "programs"};
+  const map = {intro:"introduction", teachers:"teachers", programs:"programs", menu:"menu"};
   const endpoint = API + "/api/" + map[currentTab] + (editId ? "/"+editId : "");
   const method = editId ? "PUT" : "POST";
   let body = {};
@@ -244,13 +291,21 @@ async function saveData() {
       name: document.getElementById("f_name").value,
       degree: document.getElementById("f_degree").value,
       duration: document.getElementById("f_duration").value,
-      description: document.getElementById("f_desc").value
+      description: document.getElementById("f_desc").value,
+      image_url: document.getElementById("f_image").value
+    };
+  }
+  if (currentTab === "menu") {
+    body = {
+      label: document.getElementById("f_label").value,
+      link: document.getElementById("f_link").value,
+      order_num: parseInt(document.getElementById("f_order").value) || 0
     };
   }
 
   await fetch(endpoint, {
-    method, credentials: "include",
-    headers: {"Content-Type": "application/json"},
+    method, credentials:"include",
+    headers:{"Content-Type":"application/json"},
     body: JSON.stringify(body)
   });
 
