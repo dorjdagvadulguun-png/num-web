@@ -8,7 +8,7 @@ import hashlib
 import time
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:8080", "https://num-web-abc123.vercel.app"])
+CORS(app, origins=["http://localhost:8080", "https://your-frontend-url.vercel.app"])
 
 @app.route("/")
 def home():
