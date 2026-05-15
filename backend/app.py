@@ -8,7 +8,10 @@ import hashlib
 import time
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:8080", "https://your-frontend-url.vercel.app"])
+CORS(app, origins=[
+    "http://localhost:8080",
+    "https://your-frontend.netlify.app"  # ← update this after Netlify deploy
+])
 
 @app.route("/")
 def home():
