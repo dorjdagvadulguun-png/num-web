@@ -8,7 +8,7 @@ import hashlib
 import time
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:8080"])    
+CORS(app, origins=["http://localhost:8080",  "https://num-web.netlify.app"])    
     
 
 # Simple token store
