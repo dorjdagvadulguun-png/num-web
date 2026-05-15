@@ -10,6 +10,10 @@ import time
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:8080", "https://num-web-abc123.vercel.app"])
 
+@app.route("/")
+def home():
+    return jsonify({"status": "ok", "message": "NUM Web API is running!"})
+
 # Simple token store
 tokens = {}
 
